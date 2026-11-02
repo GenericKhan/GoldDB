@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gold Dashboard</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#b8860b">
+<style>
+:root{--bg:#f6f4ee;--card:#fff;--tx:#1d1b16;--mu:#6f6a5c;--bd:#e3dfd2;--gold:#b8860b;--up:#1a7f4b;--dn:#c0392b;--ne:#8a8576;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14130f;--card:#1e1c16;--tx:#efeadb;--mu:#a29c88;--bd:#34311f;--gold:#e0b341;--up:#4cc38a;--dn:#ef6b5b;--ne:#9a9482;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14130f;--card:#1e1c16;--tx:#efeadb;--mu:#a29c88;--bd:#34311f;--gold:#e0b341;--up:#4cc38a;--dn:#ef6b5b;--ne:#9a9482;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding:14px}
+h1{font-size:18px;margin:0}.sub{color:var(--mu);font-size:12px}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.tabs button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:6px 12px;border-radius:8px;cursor:pointer;font-size:13px;margin-right:4px}
+.tabs button.on{background:var(--gold);color:#fff;border-color:var(--gold)}
+.grid{display:grid;gap:10px}.g4{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;min-width:0}
+.sec{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin:14px 0 6px;font-weight:600}
+.big{font-size:32px;font-weight:700;color:var(--gold)}.v{font-size:20px;font-weight:650}
+.up{color:var(--up)}.dn{color:var(--dn)}.ne{color:var(--ne)}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid currentColor}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.bar{height:8px;border-radius:4px;background:var(--bd);overflow:hidden;margin:4px 0}.bar i{display:block;height:100%}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.chip{padding:3px 9px;border:1px solid var(--bd);border-radius:8px;font-size:12px}
+.note{color:var(--mu);font-size:11px;margin-top:12px}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap}
+.hide{display:none}svg{display:block;max-width:100%}
+</style></head><body>
+<header><div><h1>Gold Dashboard <span class="tag ne" id="stamp"></span></h1><div class="sub">Price · Macro · Policy · Sentiment</div></div>
+<div class="tabs"><button data-t="full" class="on">Full</button><button data-t="min">Minimal 5</button><button data-t="trader">Trader</button></div></header>
+<div id="full"></div><div id="min" class="hide"></div><div id="trader" class="hide"></div>
+<p class="note">Gold is live when the free gold-api.com feed is reachable. Macro rows go live once LIVE_URL is set (see README). Anything tagged “sample” is a placeholder: Fed odds, ETF flows, central-bank buying, geopolitical risk and PMI have no free live feed. Not investment advice.</p>
+<script>
+const DATA={
+gold:{v:4138,hi:4162,lo:4101,d:0.4,w:-1.1,m:2.3},
+// k,name,value,unit,30d change,change unit,bullish direction (+1 up helps gold, -1 down helps), vol, anchored
+macro:[
+["dxy","US Dollar Index",100.4,"",1.2,"%",-1,.35],
+["y10","US 10-yr yield",5.31,"%",0.28,"pp",-1,.05,1],
+["real","US real yield (10y)",2.6,"%",0.22,"pp",-1,.04],
+["oil","Oil (WTI)",89.43,"$",6.5,"%",1,1.6,1],
+["cpi","US CPI (YoY)",3.4,"%",0.2,"pp",1,.05],
+["pce","US PCE (YoY)",3.1,"%",0.1,"pp",1,.04],
+["unemp","Unemployment rate",4.5,"%",0.1,"pp",1,.04],
+["pmi","US PMI (composite)",50.8,"",-0.9,"",1,.4]],
+fed:{rate:"3.50–3.75%",cut:22,hold:63,hike:15,next:"2026-12-09T14:00:00-05:00"},
+speeches:["Hawkish tilt: inflation still sticky","Labour market cooling, watching closely","Balance-sheet runoff under review"],
+vix:{v:21.5,chg:3.1},etf:[-0.8,0.3,-1.2,0.6,-0.4,0.9,-0.7,-0.3],cb:[44,52,60,38,55,47,62,58],geo:68,risk:"Risk-off tilt: equities soft, credit spreads wider"
+};
+// seeded random walk ending at target
+function ser(end,n,vol,seed){let s=seed,r=()=>(s=(s*16807)%2147483647)/2147483647-.5,a=[0];for(let i=1;i<n;i++)a.push(a[i-1]+r()*vol*2);const o=end-a[n-1];return a.map(x=>x+o)}
+const $=id=>document.getElementById(id),fmt=(x,d=2)=>x.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const cl=s=>s>0?'up':s<0?'dn':'ne',lab=s=>s>0?'Bullish':s<0?'Bearish':'Neutral';
+function spark(a,w=150,h=38,c='var(--gold)'){const mn=Math.min(...a),mx=Math.max(...a),p=a.map((y,i)=>[i/(a.length-1)*w,h-2-(y-mn)/(mx-mn||1)*(h-4)]);const d=p.map((q,i)=>(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1)).join('');return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><path d="${d}L${w} ${h}L0 ${h}Z" fill="${c}" opacity=".12"/><path d="${d}" fill="none" stroke="${c}" stroke-width="1.6"/></svg>`}
+function bars(a,w=150,h=44,sg=true){const m=Math.max(...a.map(Math.abs)),bw=w/a.length;return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none">`+a.map((v,i)=>{const bh=Math.abs(v)/m*(sg?h/2-2:h-2),y=sg?(v>=0?h/2-bh:h/2):h-bh;return `<rect x="${i*bw+2}" y="${y}" width="${bw-4}" height="${bh}" fill="${v>=0?'var(--up)':'var(--dn)'}" rx="2"/>`}).join('')+(sg?`<line x1="0" x2="${w}" y1="${h/2}" y2="${h/2}" stroke="var(--bd)"/>`:'')+`</svg>`}
+function gauge(score){const a=Math.PI*(1-(score+1)/2),x=100+70*Math.cos(a),y=95-70*Math.sin(a);return `<svg viewBox="0 0 200 110" width="100%" height="110"><path d="M30 95A70 70 0 0 1 100 25" fill="none" stroke="var(--dn)" stroke-width="12"/><path d="M100 25A70 70 0 0 1 170 95" fill="none" stroke="var(--up)" stroke-width="12"/><line x1="100" y1="95" x2="${x}" y2="${y}" stroke="var(--tx)" stroke-width="3" stroke-linecap="round"/><circle cx="100" cy="95" r="5" fill="var(--tx)"/><text x="22" y="108" font-size="10" fill="var(--mu)">Bearish</text><text x="150" y="108" font-size="10" fill="var(--mu)">Bullish</text></svg>`}
+// build model
+const M=DATA.macro.map((r,i)=>{const [k,name,v,u,ch,cu,bd,vol,anc]=r;const sg=Math.sign(ch)*bd;return{k,name,v,u,ch,cu,bd,anc,sg,s:ser(v,30,vol*2,11+i*7)}});
+const get=k=>M.find(x=>x.k===k);
+const G=ser(DATA.gold.v,60,38,5);
+let sig,drivers,score;
+function calc(){sig={fed:DATA.fed.cut>=DATA.fed.hike?1:-1,vix:DATA.vix.chg>0?1:-1,etf:Math.sign(DATA.etf.reduce((a,b)=>a+b,0)),cb:1,geo:DATA.geo>60?1:0};
+drivers=[["Real yields",get('real').sg,2],["US dollar",get('dxy').sg,2],["Fed expectations",sig.fed,1.5],["ETF flows",sig.etf,1],["Volatility / risk",sig.vix,1],["Geopolitics",sig.geo,1],["Central banks",sig.cb,1]];
+score=drivers.reduce((a,d)=>a+d[1]*d[2],0)/drivers.reduce((a,d)=>a+d[2],0)}
+function tile(m){const c=cl(m.sg);return `<div class="card"><div class="row"><span class="sub">${m.name}${m.live?' <span class="up">● live</span>':' <span class="ne">sample</span>'}</span><span class="tag ${c}">${lab(m.sg)}</span></div><div class="v">${m.u==='$'?'$':''}${fmt(m.v)}${m.u==='%'?'%':''}</div><div class="sub ${m.ch>=0?'':''}">${m.ch>0?'+':''}${+m.ch.toFixed(2)}${m.cu==='pp'?' pp':m.cu} · 30d</div>${spark(m.s,150,34,`var(--${c})`)}</div>`}
+function cd(){const t=new Date(DATA.fed.next)-new Date();if(t<0)return'Meeting today / passed';const d=Math.floor(t/864e5),h=Math.floor(t%864e5/36e5);return d+' d '+h+' h'}
+function ch(x){if(x==null)return'<span class="ne">n/a</span>';x=+(+x).toFixed(2);return `<span class="${cl(x)}">${x>0?'+':''}${x}%</span>`}
+function full(){const g=DATA.gold,pos=g.hi>g.lo?(g.v-g.lo)/(g.hi-g.lo)*100:50;
+return `<div class="sec">Price</div><div class="grid g2"><div class="card"><div class="sub">Gold spot (XAU/USD) ${LV.gold?'<span class="up">● live</span>':'<span class="ne">sample</span>'}</div><div class="big">$${fmt(g.v)}</div>
+<div class="chips"><span class="chip">1d ${ch(g.d)}</span><span class="chip">1w ${ch(g.w)}</span><span class="chip">1m ${ch(g.m)}</span></div>
+<div class="sub" style="margin-top:10px">Intraday range $${fmt(g.lo,0)} – $${fmt(g.hi,0)}</div><div class="bar"><i style="width:${pos}%;background:var(--gold)"></i></div></div>
+<div class="card"><div class="sub">Price trend ${LV.gold?'(builds daily from your visits)':'(sample)'}</div>${spark(G,320,120)}</div></div>
+<div class="sec">Macro</div><div class="grid g4">${M.map(tile).join('')}</div>
+<div class="sec">Policy</div><div class="grid g4">
+<div class="card"><div class="sub">Fed funds rate</div><div class="v">${DATA.fed.rate}</div><div class="sub">Target range</div></div>
+<div class="card"><div class="sub">Next FOMC countdown</div><div class="v" id="cd">${cd()}</div><div class="sub">8–9 Dec 2026</div></div>
+<div class="card"><div class="sub">Market-implied next move (sample)</div><div class="bar" style="height:14px;display:flex"><i style="width:${DATA.fed.cut}%;background:var(--up)"></i><i style="width:${DATA.fed.hold}%;background:var(--ne)"></i><i style="width:${DATA.fed.hike}%;background:var(--dn)"></i></div><div class="sub"><span class="up">Cut ${DATA.fed.cut}%</span> · Hold ${DATA.fed.hold}% · <span class="dn">Hike ${DATA.fed.hike}%</span></div></div>
+<div class="card"><div class="sub">Recent Fed speak</div>${DATA.speeches.map(s=>`<div class="sub" style="color:var(--tx)">• ${s}</div>`).join('')}</div></div>
+<div class="sec">Sentiment</div><div class="grid g4">
+<div class="card"><div class="sub">VIX ${LV.vix?'<span class="up">● live</span>':'<span class="ne">sample</span>'}</div><div class="v">${DATA.vix.v}</div><div class="bar"><i style="width:${Math.min(DATA.vix.v/40*100,100)}%;background:${DATA.vix.v>25?'var(--dn)':DATA.vix.v>18?'var(--gold)':'var(--up)'}"></i></div><div class="sub">${DATA.vix.v>25?'High fear':DATA.vix.v>18?'Elevated':'Calm'}</div></div>
+<div class="card"><div class="sub">Gold ETF flows (sample)</div>${bars(DATA.etf)}</div>
+<div class="card"><div class="sub">Central bank buying (sample)</div>${bars(DATA.cb,150,44,false)}</div>
+<div class="card"><div class="sub">Geopolitical risk (sample)</div><div class="v">${DATA.geo}/100</div><div class="bar"><i style="width:${DATA.geo}%;background:var(--gold)"></i></div><div class="sub">${DATA.risk}</div></div></div>
+<div class="sec">Reading the board</div><div class="grid g2"><div class="card"><div class="sub">Composite gold bias (weighted)</div>${gauge(score)}<div class="row"><b class="${cl(score)}">${lab(score)} (${fmt(score)})</b></div></div>
+<div class="card"><div class="sub">Driver breakdown</div>${drivers.map(d=>`<div class="row"><span>${d[0]}</span><span class="${cl(d[1])}">${lab(d[1])}</span></div>`).join('')}</div></div>`}
+function min(){const five=[["Gold",Math.sign(DATA.gold.d||0),'$'+fmt(DATA.gold.v,0),G,ch(DATA.gold.d)],["Dollar (DXY)",get('dxy').sg,fmt(get('dxy').v,1),get('dxy').s,''],["Real yield",get('real').sg,fmt(get('real').v)+'%',get('real').s,''],["Fed expectations",sig.fed,DATA.fed.cut+'% cut',null,''],["VIX",sig.vix,String(DATA.vix.v),null,'']];
+return `<div class="grid g4" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">${five.map(f=>`<div class="card"><div class="sub">${f[0]}</div><div class="v">${f[2]}</div><span class="tag ${cl(f[1])}">${lab(f[1])}</span>${f[3]?spark(f[3],150,40,`var(--${cl(f[1])})`):''}</div>`).join('')}</div>
+<div class="card" style="margin-top:10px"><div class="sub">Bias from these 5 (equal weight)</div>${gauge(five.reduce((a,f)=>a+f[1],0)/5)}</div>`}
+function trader(){const R=get('real'),D=get('dxy'),T=get('y10');
+const rules=[[1,"Real yield",R.v,"> 2.50%",R.v>2.5,"Headwind: real yield above threshold"],[2,"USD index (30d)",D.ch,"> +1%",D.ch>1,"Dollar strength capping gold"],[3,"10-yr yield",T.v,"> 5.00%",T.v>5,"Nominal yield pressure"],[4,"VIX",DATA.vix.v,"> 25",DATA.vix.v>25,"Safe-haven bid likely"],[5,"Gold vs 60d low",DATA.gold.v,"< 4,000",DATA.gold.v<4000,"Support break"]];
+const hot=rules.filter(r=>r[4]);
+return `<div class="grid g2"><div class="card"><div class="sub">Gold ${LV.gold?'<span class="up">● live</span>':'<span class="ne">sample</span>'}</div><div class="big">$${fmt(DATA.gold.v)}</div>${spark(G,320,90)}<div class="chips"><span class="chip">Bias: <b class="${cl(score)}">${lab(score)}</b></span><span class="chip">FOMC in <b id="cd">${cd()}</b></span></div></div>
+<div class="card"><div class="sub">Active alerts (${hot.length})</div>${hot.length?hot.map(r=>`<div class="row" style="padding:4px 0"><span class="dn">▲ P${r[0]} ${r[1]}</span><span class="sub">${r[5]}</span></div>`).join(''):'<div class="sub">No thresholds breached</div>'}
+<div class="sub" style="margin-top:8px">Thresholds are editable examples.</div></div></div>
+<div class="sec">Priority-ranked drivers</div><div class="card scroll"><table><tr><th>P</th><th>Driver</th><th>Now</th><th>Alert if</th><th>Status</th><th>Gold read</th></tr>
+${rules.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${fmt(r[2])}</td><td>${r[3]}</td><td class="${r[4]?'dn':'up'}">${r[4]?'TRIGGERED':'OK'}</td><td>${r[4]?'Bearish / watch':'Neutral–supportive'}</td></tr>`).join('')}</table></div>
+<div class="sec">Event watchlist</div><div class="grid g4"><div class="card"><div class="sub">Next FOMC</div><div class="v">8–9 Dec</div></div><div class="card"><div class="sub">US jobs report</div><div class="v">Typically 1st Fri</div></div><div class="card"><div class="sub">CPI / PCE</div><div class="v">Mid / end month</div></div><div class="card"><div class="sub">Rule of thumb</div><div class="sub" style="color:var(--tx)">Dollar↓ + yields↓ = supportive. Dollar↑ + yields↑ = bearish. Safe-haven bids can override.</div></div></div>`}
+const LIVE_URL="";// paste your Cloudflare Worker URL here (see README)
+const LV={},J=async u=>{const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw 0;return r.json()},dk=o=>o.toISOString().slice(0,10);
+function applyGold(p){if(!(p>0))return;LV.gold=1;const t=dk(new Date());let h={},x={};
+try{h=JSON.parse(localStorage.getItem('gh')||'{}');x=JSON.parse(localStorage.getItem('gx')||'{}')}catch(e){}
+h[t]=p;if(x.t!==t)x={t,hi:p,lo:p};x.hi=Math.max(x.hi,p);x.lo=Math.min(x.lo,p);
+const ks=Object.keys(h).sort().slice(-90),H={};ks.forEach(k=>H[k]=h[k]);
+try{localStorage.setItem('gh',JSON.stringify(H));localStorage.setItem('gx',JSON.stringify(x))}catch(e){}
+const ago=n=>{const c=dk(new Date(Date.now()-n*864e5)),k=ks.filter(k=>k<=c&&k<t).pop();return k?(p/H[k]-1)*100:null},pr=ks.filter(k=>k<t).pop();
+Object.assign(DATA.gold,{v:p,hi:x.hi,lo:x.lo,d:pr?(p/H[pr]-1)*100:null,w:ago(7),m:ago(30)});
+G.length=0;ks.forEach(k=>G.push(H[k]));if(G.length<2)G.push(p)}
+const MAP={dxy:'usd',y10:'dgs10',real:'dfii10',oil:'oil',cpi:'cpi',pce:'pce',unemp:'unrate'},MON=['cpi','pce','unemp'];
+function applyMacro(d){const S=d.s||{};M.forEach(m=>{const a=S[MAP[m.k]];if(!a||a.length<2)return;const l=a[a.length-1],mo=MON.includes(m.k);m.s=a;m.v=l;
+m.ch=m.cu==='%'&&!mo?(l/a[0]-1)*100:l-(mo?a[a.length-2]:a[0]);m.sg=Math.sign(m.ch)*m.bd;m.live=1});
+if(S.vix&&S.vix.length>1){const a=S.vix;DATA.vix={v:a[a.length-1],chg:a[a.length-1]-a[0]};LV.vix=1}
+if(d.fed)DATA.fed.rate=d.fed}
+function renderAll(){calc();$('full').innerHTML=full();$('min').innerHTML=min();$('trader').innerHTML=trader();
+$('stamp').textContent=(LV.gold||LV.macro)?'Live · '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'Sample data'}
+async function live(){let d=null;
+if(LIVE_URL)try{d=await J(LIVE_URL);applyMacro(d);LV.macro=1}catch(e){}
+try{let p=d&&d.gold;if(!p)p=(await J('https://api.gold-api.com/price/XAU')).price;applyGold(+p)}catch(e){}
+renderAll()}
+renderAll();live();setInterval(live,300000);
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));['full','min','trader'].forEach(t=>$(t).classList.toggle('hide',t!==b.dataset.t))});
+setInterval(()=>document.querySelectorAll('#cd').forEach(e=>e.textContent=cd()),60000);
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
